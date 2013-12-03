@@ -1,0 +1,9 @@
+.idea
+.settings
+.classpath
+tests-out
+bin
+project
+lib_managed
+*.iml
+.history
