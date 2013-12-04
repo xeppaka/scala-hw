@@ -1,0 +1,6 @@
+[0m[[0minfo[0m] [0m[32mEpidemySuite:[0m[0m
+[0m[[0minfo[0m] [0m[32m- prevalence rate[0m[0m
+[0m[[0minfo[0m] [0m[32m- dead person stays dead[0m[0m
+[0m[[0minfo[0m] [0m[32m- life cycle[0m[0m
+[0m[[0minfo[0m] [0m[31m- transmissibility rate *** FAILED ***[0m[0m
+[0m[[0minfo[0m] [0m[31m  A person should get infected according to the transmissibility rate when he moves into a room with an infectious person (EpidemySuite.scala:99)[0m[0m
