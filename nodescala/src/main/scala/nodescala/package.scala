@@ -81,7 +81,11 @@ package object nodescala {
 
     /** Creates a cancellable context for an execution and runs it.
      */
-    def run()(f: CancellationToken => Future[Unit]): Subscription = ???
+    def run()(f: CancellationToken => Future[Unit]): Subscription = {
+      val source = CancellationTokenSource()
+      f(source.cancellationToken)
+      source
+    }
 
   }
 
@@ -114,7 +118,19 @@ package object nodescala {
      *  The resulting future contains a value returned by `cont`.
      */
     def continueWith[S](cont: Future[T] => S): Future[S] = {
-      f.continueWith(cont)
+      val p = Promise[S]()
+
+      f onComplete {
+        case Success(v) => {
+          Try { cont(f) } match {
+            case Success(vv) => p.success(vv)
+            case Failure(vv) => p.failure(vv)
+          }
+        }
+        case Failure(v) => p.failure(v)
+      }
+
+      p.future
     }
 
     /** Continues the computation of this future by taking the result
@@ -124,7 +140,19 @@ package object nodescala {
      *  The resulting future contains a value returned by `cont`.
      */
     def continue[S](cont: Try[T] => S): Future[S] = {
-      f.continue(cont)
+      val p = Promise[S]()
+
+      f onComplete {
+        case Success(v) => {
+          Try { cont(Success(v)) } match {
+            case Success(vv) => p.success(vv)
+            case Failure(vv) => p.failure(vv)
+          }
+        }
+        case Failure(v) => p.failure(v)
+      }
+
+      p.future
     }
 
   }
@@ -160,7 +188,7 @@ package object nodescala {
    *  returns a `cancellationToken` which is cancelled by calling `unsubscribe`.
    *  
    *  After calling `unsubscribe` once, the associated `cancellationToken` will
-   *  forever remain cancelled -- its `isCancelled` will return `false.
+   *  forever remain cancelled -- its `isCancelled` will return false.
    */
   trait CancellationTokenSource extends Subscription {
     def cancellationToken: CancellationToken
@@ -172,12 +200,12 @@ package object nodescala {
     /** Creates a new `CancellationTokenSource`.
      */
     def apply(): CancellationTokenSource = new CancellationTokenSource {
-      private val t = new Subscription {
-        def unsubscribe(): Unit =
+      private var cancelled = false
+      def cancellationToken: CancellationToken = new CancellationToken {
+        def isCancelled: Boolean = cancelled
       }
-      def cancellationToken: CancellationToken =
 
-      def unsubscribe(): Unit =
+      def unsubscribe(): Unit = { cancelled = true }
     }
   }
 

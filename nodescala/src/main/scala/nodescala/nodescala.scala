@@ -10,6 +10,7 @@ import scala.collection.JavaConversions._
 import java.util.concurrent.{Executor, ThreadPoolExecutor, TimeUnit, LinkedBlockingQueue}
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import java.net.InetSocketAddress
+import scala.util.{Failure, Success}
 
 /** Contains utilities common to the NodeScala© framework.
  */
@@ -27,9 +28,15 @@ trait NodeScala {
    *
    *  @param exchange     the exchange used to write the response back
    *  @param token        the cancellation token for
-   *  @param body         the response to write back
+   *  @param response         the response to write back
    */
-  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = ???
+  private def respond(exchange: Exchange, token: CancellationToken, response: Response): Unit = {
+    while (response.hasNext && token.nonCancelled) {
+      exchange.write(response.next())
+    }
+
+    exchange.close()
+  }
 
   /** A server:
    *  1) creates and starts an http listener
@@ -41,8 +48,26 @@ trait NodeScala {
    *  @param handler        a function mapping a request to a response
    *  @return               a subscription that can stop the server and all its asynchronous operations *entirely*.
    */
-  def start(relativePath: String)(handler: Request => Response): Subscription = ???
+  def start(relativePath: String)(handler: Request => Response): Subscription = {
+    val list: Listener = createListener(relativePath)
 
+    val source = CancellationTokenSource()
+    val listSub = list.start()
+
+    def process: Unit = {
+      val f = list.nextRequest()
+      f.onComplete(t => t match {
+        case Success(v) => {
+          respond(v._2, source.cancellationToken, handler(v._1))
+          process
+        }
+        case Failure(v) => throw v
+      })
+    }
+
+    process
+    Subscription(source, listSub)
+  }
 }
 
 
@@ -108,10 +133,16 @@ object NodeScala {
      *     and then deregisters itself using `removeContext`
      *  3) returns the future with the request
      *
-     *  @param relativePath    the relative path on which we want to listen to requests
      *  @return                the promise holding the pair of a request and an exchange object
      */
-    def nextRequest(): Future[(Request, Exchange)] = ???
+    def nextRequest(): Future[(Request, Exchange)] = {
+      val p = Promise[(Request, Exchange)]()
+      createContext((e: Exchange) => {
+        removeContext()
+        p.success((e.request, e))
+      })
+      p.future
+    }
   }
 
   object Listener {
